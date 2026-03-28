@@ -1,10 +1,10 @@
 import Flutter
 import UIKit
 
-public class FlutterBackgroundEnginePlugin: NSObject, FlutterPlugin {
+public class BackgroundDataFetcherPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "flutter_background_engine", binaryMessenger: registrar.messenger())
-    let instance = FlutterBackgroundEnginePlugin()
+    let channel = FlutterMethodChannel(name: "background_data_fetcher", binaryMessenger: registrar.messenger())
+    let instance = BackgroundDataFetcherPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 

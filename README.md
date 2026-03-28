@@ -1,11 +1,11 @@
-# Flutter Background Engine 🛰️
+# background_data_fetcher 🛰️
 
 A robust, plug-and-play Flutter library for executing background tasks and storing the results in a local SQLite database.
 
 Designed to survive aggressive Android background limitations (OEM-specific RAM cleaners) and handle the complexities of cross-isolate communication. By decoupling the background engine from the data payload, this kit acts as a blank canvas—you provide the data-fetching function, and this library guarantees it runs exactly on time, every time.
 
 
----
+
 
 ## ✨ Features
 
@@ -19,7 +19,8 @@ Designed to survive aggressive Android background limitations (OEM-specific RAM 
 
 * **Platform Native Support:** Android 14 Ready (foregroundServiceType: dataSync) and integrated with iOS BGTaskScheduler.
 
----
+
+
 
 ## 📦 Installation
 
@@ -27,14 +28,15 @@ Add this to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_background_engine:
+  background_data_fetcher:
     git:
-      url: https://github.com/geogkikas/flutter_background_engine.git
+      url: https://github.com/geogkikas/background_data_fetcher.git
       ref: main
 ```
 
 
----
+
+
 
 ## 🛠️ Native Setup (Required)
 
@@ -116,7 +118,7 @@ Modifying the `Info.plist` manually is sometimes overridden by Xcode. To ensure 
 
 
 
-## 🤖 Android Setup
+### 🤖 Android Setup
 
 Good news! The core library automatically merges all required scheduling permissions (`WAKE_LOCK`, `SCHEDULE_EXACT_ALARM`, etc.) into your app. However, if you are fetching Location data in the background, you must explicitly upgrade your app's Foreground Service type.
 
@@ -145,7 +147,8 @@ If you are using location in your background callback, add the tools namespace t
 
 > **⚠️ Google Play Note:** If you declare `foregroundServiceType="location"`, Google Play requires you to submit a "Location Permissions Declaration" video during your app review demonstrating why continuous background location is critical to your app's core functionality.
 
----
+
+
 
 ## 🚀 Quick Start
 
@@ -172,14 +175,13 @@ Future<Map<String, dynamic>> myBackgroundFetch() async {
 
 
 
-
 ### 2. Initialize and Start
 
 Call `initAndStart()` in your `main.dart`. It automatically handles the background isolate and schedules the exact alarms.
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutter_background_engine/flutter_background_engine.dart';
+import 'package:background_data_fetcher/background_data_fetcher.dart';
 import 'package:permission_handler/permission_handler.dart'; // Handled by host app
 
 void main() async {
@@ -191,9 +193,9 @@ void main() async {
   await Permission.scheduleExactAlarm.request();
 
   // 2. Setup and start the engine, passing your callback
-  bool started = await FlutterBackgroundEngine.initAndStart(
+  bool started = await BackgroundDataFetcher.initializeAndStart(
     fetchCallback: myBackgroundFetch,
-    config: const BackgroundConfig(
+    config: const FetchConfig(
       intervalMinutes: 15, // Logs exactly on the 15-minute marks
     ),
   );
@@ -210,26 +212,27 @@ Whenever your UI wakes up, simply pull the unsynced logs.
 
 ```dart
 void syncDataToServer() async {
-  List<BackgroundLog> logs = await FlutterBackgroundEngine.getUnsyncedLogs();
+  List<FetchRecord> records = await BackgroundDataFetcher.getUnsyncedRecords();
 
-  for (var log in logs) {
-    print("Time: ${log.timestamp}");
+  for (var record in records) {
+    print("Time: ${record.timestamp}");
 
     // Access your custom JSON payload directly!
-    print("Battery: ${log.payload['battery']}%");
-    print("Status: ${log.payload['status']}");
+    print("Battery: ${record.payload['battery']}%");
+    print("Status: ${record.payload['status']}");
   }
 
   // Once sent to your API, mark them as synced so they aren't pulled again:
-  List<int> syncedIds = logs.map((e) => e.sqliteId!).toList();
-  await FlutterBackgroundEngine.markAsSynced(syncedIds);
+  List<int> syncedIds = records.map((e) => e.sqliteId!).toList();
+  await BackgroundDataFetcher.markAsSynced(syncedIds);
 }
 ```
 
----
 
 
-## ⚙️ Configuration (`BackgroundConfig`)
+
+
+## ⚙️ Configuration (`FetchConfig`)
 
 You can deeply customize the battery impact of your background isolate by toggling specific hardware features.
 
@@ -238,15 +241,16 @@ You can deeply customize the battery impact of your background isolate by toggli
 | `intervalMinutes` | `int`  | `15`    | The frequency of data collection. Hardware-aligned to the minute. |
 
 
----
 
 
-## 📊 The Data Model (BackgroundLog)
+
+
+## 📊 The Data Model (FetchRecord)
 
 No more guessing map keys. The library returns a strongly typed model for absolute safety:
 
 ```dart
-class BackgroundLog {
+class FetchRecord {
   final int? sqliteId;                // The local database row ID
   final String timestamp;             // ISO-8601 string of collection time
   final Map<String, dynamic> payload; // Your custom data returned from the callback
@@ -254,27 +258,28 @@ class BackgroundLog {
 }
 ```
 
----
+
+
 
 ## 🛠️ Advanced API Usage
 
-If you need manual control over the service lifecycle, `FlutterBackgroundEngine` exposes the following methods:
+If you need manual control over the service lifecycle, `BackgroundDataFetcher` exposes the following methods:
 
-- **`FlutterBackgroundEngine.updateInterval(int minutes)`**: Change the hardware alarm frequency on the fly.
+- **`BackgroundDataFetcher.updateInterval(int minutes)`**: Change the hardware alarm frequency on the fly.
 
-- **`FlutterBackgroundEngine.stop()`**: Kills the foreground service and cancels all future hardware alarms.
+- **`BackgroundDataFetcher.stop()`**: Kills the foreground service and cancels all future hardware alarms.
 
-- **`FlutterBackgroundEngine.getHistory()`**: Returns all logs ever recorded on the device.
+- **`BackgroundDataFetcher.getHistory()`**: Returns all records ever recorded on the device.
 
-- **`FlutterBackgroundEngine.getUnsyncedLogs()`**: Returns only logs that haven't been marked as synced.
+- **`BackgroundDataFetcher.getUnsyncedRecords()`**: Returns only records that haven't been marked as synced.
 
-- **`FlutterBackgroundEngine.markAsSynced(List<int> ids)`**: Flags specific logs as synced.
+- **`BackgroundDataFetcher.markAsSynced(List<int> ids)`**: Flags specific records as synced.
 
-- **`FlutterBackgroundEngine.revertAllSynced()`**: Un-flags all previously synced logs (useful for testing/recovery).
+- **`BackgroundDataFetcher.revertAllSyncedStatus()`**: Un-flags all previously synced records (useful for testing/recovery).
 
-- **`FlutterBackgroundEngine.clearHistory()`**: Wipes the local SQLite database to free up device space.
+- **`BackgroundDataFetcher.clearHistory()`**: Wipes the local SQLite database to free up device space.
 
-- **`FlutterBackgroundEngine.isRunning()`**: Returns a boolean indicating if the background isolate is currently alive.
+- **`BackgroundDataFetcher.isRunning()`**: Returns a boolean indicating if the background isolate is currently alive.
 
     
 ---

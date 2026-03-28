@@ -1,4 +1,4 @@
-name: flutter_background_engine
+name: background_data_fetcher
 description: "A generic Flutter background scheduling and SQLite storage engine."
 version: 0.0.1
 homepage:
@@ -29,7 +29,7 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.example.flutter_background_engine
-        pluginClass: FlutterBackgroundEnginePlugin
+        package: com.example.background_data_fetcher
+        pluginClass: BackgroundDataFetcherPlugin
       ios:
-        pluginClass: FlutterBackgroundEnginePlugin
+        pluginClass: BackgroundDataFetcherPlugin

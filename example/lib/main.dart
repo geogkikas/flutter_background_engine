@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:background_data_fetcher/background_data_fetcher.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_background_engine/flutter_background_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_context/device_context.dart';
 
 // =================================================================
@@ -13,69 +14,31 @@ Future<Map<String, dynamic>> fetchDeviceDataCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // 1. Fetch data using the elegant Configuration Objects
     final data = await DeviceContext.getSensorData(
-      fetchDeviceInfo: true,
-      fetchBasic: true,
-      fetchThermal: true,
-      fetchElectrical: true,
-      fetchHealth: true,
-      fetchEnvironment: true,
-      fetchLocation: true,
-      fetchMotion: true,
-      fetchActivity: true,
+      hardware: const HardwareConfig(
+        deviceInfo: true,
+        batteryStatus: true,
+        instantElectricalDraw: true,
+        thermalState: true,
+        batteryHealth: true,
+      ),
+      instantSensors: const InstantSensorsConfig(
+        ambientLight: true,
+        location: true,
+        motionAndPosture: true,
+        aiActivityPrediction: true,
+      ),
+      continuousSampling: const ContinuousSamplingConfig(
+        window: Duration(seconds: 15),
+        samplingRateHz: 20,
+        averageElectricalDraw: true,
+        averageMotionState: true,
+        averageAmbientLight: true,
+      ),
     );
 
-    return {
-      // Device Info
-      'manufacturer': data.deviceInfo?.manufacturer ?? 'N/A',
-      'model': data.deviceInfo?.model ?? 'N/A',
-      'brand': data.deviceInfo?.brand ?? 'N/A',
-      'board': data.deviceInfo?.board ?? 'N/A',
-      'hardware': data.deviceInfo?.hardware ?? 'N/A',
-      'osName': data.deviceInfo?.osName ?? 'N/A',
-      'osVersion': data.deviceInfo?.osVersion ?? 'N/A',
-      'deviceId': data.deviceInfo?.deviceId ?? 'Unknown',
-
-      // Basic Power
-      'batteryLevel': data.basic?.batteryLevel ?? -1,
-      'chargingStatus': data.basic?.status ?? -1,
-      'pluggedStatus': data.basic?.pluggedStatus ?? -1,
-
-      // Thermal
-      'batteryTemp': data.thermal?.batteryTemp ?? 'N/A',
-      'cpuTemp': data.thermal?.cpuTemp ?? 'N/A',
-      'thermalStatus': data.thermal?.thermalStatus ?? -1,
-
-      // Electrical
-      'currentDraw_mA': data.electrical?.currentNowMA ?? 'N/A',
-      'voltage_mV': data.electrical?.voltage ?? 'N/A',
-
-      // Health
-      'batteryHealth': data.health?.health ?? -1,
-      'cycleCount': data.health?.cycleCount ?? 'N/A',
-      'chargeCounter_mAh': data.health?.chargeCounterMAh ?? 'N/A',
-
-      // Environment
-      'lightLux': data.environment?.lightLux ?? 'N/A',
-
-      // Location
-      'latitude': data.location?.latitude ?? 'N/A',
-      'longitude': data.location?.longitude ?? 'N/A',
-      'altitude': data.location?.altitude ?? 'N/A',
-
-      // Motion
-      'posture': data.motion?.posture ?? 'N/A',
-      'motionState': data.motion?.motionState ?? 'UNKNOWN',
-      'proximity_cm': data.motion?.proximityCm ?? 'N/A',
-      'isCovered': data.motion?.isCovered ?? false,
-      'accelX': data.motion?.accelX ?? 'N/A',
-      'accelY': data.motion?.accelY ?? 'N/A',
-      'accelZ': data.motion?.accelZ ?? 'N/A',
-
-      // Activity
-      'activityType': data.activity?.activityType ?? 'UNKNOWN',
-      'activityConfidence': data.activity?.activityConfidence ?? 'N/A',
-    };
+    return data.toMap();
   } catch (e) {
     debugPrint("Background Fetch Error: $e");
     return {'error': e.toString()};
@@ -84,10 +47,7 @@ Future<Map<String, dynamic>> fetchDeviceDataCallback() async {
 // =================================================================
 
 void main() async {
-  // 1. Just ensure bindings are ready
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Run the app without starting the engine
   runApp(const SensorKitExampleApp());
 }
 
@@ -97,12 +57,12 @@ class SensorKitExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sensor Kit Example',
+      title: 'Context Engine Example',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: HomePage(),
+      home: const HomePage(),
     );
   }
 }
@@ -115,7 +75,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  List<BackgroundLog> _logs = [];
+  List<FetchRecord> _records = [];
   bool _isLoading = false;
   bool _isServiceRunning = false;
   int _currentInterval = 15;
@@ -156,8 +116,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _checkServiceStatus() async {
-    final isRunning = await FlutterBackgroundEngine.isRunning();
-    final interval = await FlutterBackgroundEngine.getSavedInterval();
+    final isRunning = await BackgroundDataFetcher.isRunning();
+
+    // Read the interval from SharedPreferences (matching our internal storage key)
+    final prefs = await SharedPreferences.getInstance();
+    final interval = prefs.getInt('fbe_sampling_interval') ?? 15;
 
     if (mounted) {
       setState(() {
@@ -172,12 +135,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!silent) setState(() => _isLoading = true);
 
     await _checkServiceStatus();
-    final logs = await FlutterBackgroundEngine.getUnsyncedLogs();
+    final records = await BackgroundDataFetcher.getUnsyncedRecords();
 
     if (mounted) {
-      if (_logs.length != logs.length || !silent) {
+      if (_records.length != records.length || !silent) {
         setState(() {
-          _logs = logs.reversed.toList();
+          _records = records.reversed.toList();
           _isLoading = false;
         });
       } else {
@@ -187,11 +150,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _syncDataToServer() async {
-    if (_logs.isEmpty) return;
+    if (_records.isEmpty) return;
     setState(() => _isLoading = true);
 
-    List<int> idsToSync = _logs.map((log) => log.sqliteId!).toList();
-    await FlutterBackgroundEngine.markAsSynced(idsToSync);
+    List<int> idsToSync = _records.map((record) => record.sqliteId!).toList();
+    await BackgroundDataFetcher.markAsSynced(idsToSync);
     await _fetchData();
 
     if (mounted) {
@@ -203,18 +166,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _revertSync() async {
     setState(() => _isLoading = true);
-    await FlutterBackgroundEngine.revertAllSynced();
+    await BackgroundDataFetcher.revertAllSyncedStatus();
     await _fetchData();
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('⏪ Synced logs reverted!')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⏪ Synced records reverted!')),
+      );
     }
   }
 
   Future<void> _deleteHistory() async {
     setState(() => _isLoading = true);
-    await FlutterBackgroundEngine.clearHistory();
+    await BackgroundDataFetcher.clearHistory();
     await _fetchData();
     if (mounted) {
       ScaffoldMessenger.of(
@@ -247,7 +210,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     if (selected != null && selected != _currentInterval) {
       setState(() => _isLoading = true);
-      await FlutterBackgroundEngine.updateInterval(selected);
+      await BackgroundDataFetcher.updateInterval(selected);
       await _checkServiceStatus();
       setState(() => _isLoading = false);
 
@@ -289,7 +252,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // --- 2. Request Hardware Permissions (for device_context) ---
     var locStatus = await Permission.locationWhenInUse.request();
     if (locStatus.isGranted) {
-      await Permission.locationAlways.request(); // Try to upgrade
+      await Permission.locationAlways
+          .request(); // Try to upgrade for background
     } else {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -308,9 +272,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     // --- 3. Start the Engine ---
-    bool started = await FlutterBackgroundEngine.initAndStart(
+    bool started = await BackgroundDataFetcher.initializeAndStart(
       fetchCallback: fetchDeviceDataCallback,
-      config: BackgroundConfig(intervalMinutes: _currentInterval),
+      config: FetchConfig(intervalMinutes: _currentInterval),
     );
 
     setState(() {
@@ -327,7 +291,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _stopService() async {
     setState(() => _isLoading = true);
-    FlutterBackgroundEngine.stop();
+    BackgroundDataFetcher.stop();
 
     setState(() {
       _isServiceRunning = false;
@@ -345,7 +309,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Background Engine'),
+        title: const Text('Background Context'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
@@ -381,7 +345,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   children: [
                     Icon(Icons.undo, color: Colors.blue),
                     SizedBox(width: 8),
-                    Text('Revert Synced Logs'),
+                    Text('Revert Synced Records'),
                   ],
                 ),
               ),
@@ -419,37 +383,50 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _logs.isEmpty
+                : _records.isEmpty
                 ? const Center(
                     child: Text(
-                      "No unsynced logs.\nMinimize the app and wait for an interval.",
+                      "No unsynced records.\nMinimize the app and wait for an interval.",
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.only(
-                      bottom: 80,
-                    ), // Padding for FAB
-                    itemCount: _logs.length,
+                    padding: const EdgeInsets.only(bottom: 80),
+                    itemCount: _records.length,
                     itemBuilder: (context, index) {
-                      final log = _logs[index];
-                      final payload = log.payload;
+                      final record = _records[index];
+                      final payload = record.payload;
 
-                      final time = DateTime.parse(log.timestamp).toLocal();
+                      // Extract nested maps safely
+                      final identity = payload['identity'] ?? {};
+                      final battery = payload['battery'] ?? {};
+                      final thermal = payload['thermal'] ?? {};
+                      final env = payload['environment'] ?? {};
+                      final loc = payload['location'] ?? {};
+                      final motion = payload['motion'] ?? {};
+                      final activity = payload['activity'] ?? {};
+
+                      final time = DateTime.parse(record.timestamp).toLocal();
                       final formattedTime =
                           "${time.hour}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}";
 
-                      // Safely format raw accelerometer doubles
-                      final ax = payload['accelX'] is num
-                          ? (payload['accelX'] as num).toStringAsFixed(2)
-                          : payload['accelX'];
-                      final ay = payload['accelY'] is num
-                          ? (payload['accelY'] as num).toStringAsFixed(2)
-                          : payload['accelY'];
-                      final az = payload['accelZ'] is num
-                          ? (payload['accelZ'] as num).toStringAsFixed(2)
-                          : payload['accelZ'];
+                      // Safely format means
+                      final meanCurrent = battery['meanCurrentMA'] != null
+                          ? (battery['meanCurrentMA'] as num).toStringAsFixed(2)
+                          : 'N/A';
+                      final meanLux = env['meanLightLux'] != null
+                          ? (env['meanLightLux'] as num).toStringAsFixed(2)
+                          : 'N/A';
+                      final meanAccelX = motion['meanAccelX'] != null
+                          ? (motion['meanAccelX'] as num).toStringAsFixed(2)
+                          : 'N/A';
+                      final meanAccelY = motion['meanAccelY'] != null
+                          ? (motion['meanAccelY'] as num).toStringAsFixed(2)
+                          : 'N/A';
+                      final meanAccelZ = motion['meanAccelZ'] != null
+                          ? (motion['meanAccelZ'] as num).toStringAsFixed(2)
+                          : 'N/A';
 
                       return Card(
                         elevation: 2,
@@ -471,7 +448,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    "Log at $formattedTime",
+                                    "Record at $formattedTime",
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 18,
@@ -483,7 +460,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       context,
                                     ).colorScheme.primaryContainer,
                                     child: Text(
-                                      "${payload['batteryLevel'] ?? '?'}%",
+                                      "${battery['level'] ?? '?'}%",
                                       style: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.bold,
@@ -494,58 +471,74 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "📱 ${payload['manufacturer']} ${payload['model']}  •  🔑 ${payload['deviceId']}",
+                                "📱 ${identity['manufacturer']} ${identity['model']}  •  🔑 ${identity['deviceId']}",
                                 style: const TextStyle(fontSize: 12),
                               ),
                               const Divider(height: 24),
 
                               // --- POWER & HEALTH ---
-                              _buildSectionHeader("Power & Health"),
+                              _buildSectionHeader("Battery & Power"),
                               _buildInfoRow(
                                 "🔋 Status",
-                                "State: ${payload['chargingStatus']} • Plug: ${payload['pluggedStatus']}",
+                                "State: ${battery['status']} • Plug: ${battery['pluggedStatus']}",
                               ),
                               _buildInfoRow(
                                 "⚡ Draw",
-                                "${payload['currentDraw_mA']} mA • ${payload['voltage_mV']} mV",
+                                "Instant: ${battery['currentNowMA']} mA • Mean: $meanCurrent mA",
+                              ),
+                              _buildInfoRow(
+                                "🔌 Voltage",
+                                "${battery['voltage']} mV",
                               ),
                               _buildInfoRow(
                                 "❤️ Health",
-                                "Health: ${payload['batteryHealth']} • Cyc: ${payload['cycleCount']} • Cap: ${payload['chargeCounter_mAh']} mAh",
+                                "Code: ${battery['health']} • Cyc: ${battery['cycleCount']} • Cap: ${battery['chargeCounterMAh']} mAh",
                               ),
 
                               // --- ENVIRONMENT & LOCATION ---
                               _buildSectionHeader("Environment & Location"),
                               _buildInfoRow(
                                 "🌡️ Temp",
-                                "Bat: ${payload['batteryTemp']}°C • CPU: ${payload['cpuTemp']}°C (Thrml: ${payload['thermalStatus']})",
+                                "Bat: ${thermal['batteryTemp']}°C • CPU: ${thermal['cpuTemp']}°C (Thrml: ${thermal['thermalStatus']})",
                               ),
                               _buildInfoRow(
                                 "☀️ Light",
-                                "${payload['lightLux']} lux",
+                                "Instant: ${env['lightLux']} lux • Mean: $meanLux lux",
                               ),
                               _buildInfoRow(
                                 "📍 GPS",
-                                "${payload['latitude']}, ${payload['longitude']} (Alt: ${payload['altitude']}m)",
+                                "${loc['latitude']}, ${loc['longitude']} (Alt: ${loc['altitude']}m)",
                               ),
 
                               // --- MOTION & AI ---
                               _buildSectionHeader("Motion & AI"),
                               _buildInfoRow(
                                 "🧠 AI",
-                                "${payload['activityType']} (${payload['activityConfidence']})",
+                                "${activity['activityType']} (${activity['activityConfidence']})",
                               ),
                               _buildInfoRow(
                                 "🏃 Motion",
-                                "${payload['motionState']} • ${payload['posture']}",
+                                "Instant: ${motion['motionState']} • Mean: ${motion['meanMotionState']}",
+                              ),
+                              _buildInfoRow(
+                                "📐 Posture",
+                                "${motion['posture']}",
                               ),
                               _buildInfoRow(
                                 "🙈 Proximity",
-                                "${payload['proximity_cm']} cm (Covered: ${payload['isCovered']})",
+                                "${motion['proximityCm']} cm (Covered: ${motion['isCovered']})",
                               ),
                               _buildInfoRow(
-                                "📐 Accel",
-                                "X: $ax • Y: $ay • Z: $az",
+                                "X Accel",
+                                "Instant: ${motion['accelX']} • Mean: $meanAccelX",
+                              ),
+                              _buildInfoRow(
+                                "Y Accel",
+                                "Instant: ${motion['accelY']} • Mean: $meanAccelY",
+                              ),
+                              _buildInfoRow(
+                                "Z Accel",
+                                "Instant: ${motion['accelZ']} • Mean: $meanAccelZ",
                               ),
                             ],
                           ),

@@ -1,5 +1,5 @@
-name: flutter_background_engine_example
-description: "Demonstrates how to use the flutter_background_engine plugin."
+name: background_data_fetcher_example
+description: "Demonstrates how to use the background_data_fetcher plugin."
 publish_to: 'none'
 
 environment:
@@ -9,7 +9,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  flutter_background_engine:
+  background_data_fetcher:
     path: ../
 
   device_context:

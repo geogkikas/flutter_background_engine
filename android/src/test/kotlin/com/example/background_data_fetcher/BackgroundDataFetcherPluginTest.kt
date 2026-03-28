@@ -1,4 +1,4 @@
-package com.example.flutter_background_engine
+package com.example.background_data_fetcher
 
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -13,10 +13,10 @@ import kotlin.test.Test
  * you can run them directly from IDEs that support JUnit such as Android Studio.
  */
 
-internal class FlutterBackgroundEnginePluginTest {
+internal class BackgroundDataFetcherPluginTest {
     @Test
     fun onMethodCall_getPlatformVersion_returnsExpectedValue() {
-        val plugin = FlutterBackgroundEnginePlugin()
+        val plugin = BackgroundDataFetcherPlugin()
 
         val call = MethodCall("getPlatformVersion", null)
         val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)

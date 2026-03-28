@@ -1,4 +1,4 @@
-package com.example.flutter_background_engine
+package com.example.background_data_fetcher
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
@@ -6,8 +6,8 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 
-/** FlutterBackgroundEnginePlugin */
-class FlutterBackgroundEnginePlugin :
+/** BackgroundDataFetcherPlugin */
+class BackgroundDataFetcherPlugin :
     FlutterPlugin,
     MethodCallHandler {
     // The MethodChannel that will the communication between Flutter and native Android
@@ -17,7 +17,7 @@ class FlutterBackgroundEnginePlugin :
     private lateinit var channel: MethodChannel
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_background_engine")
+        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "background_data_fetcher")
         channel.setMethodCallHandler(this)
     }
 

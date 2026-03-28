@@ -1,4 +1,4 @@
-package com.example.flutter_background_engine_example
+package com.example.background_data_fetcher_example
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -15,7 +15,7 @@ PODS:
     - Flutter
   - permission_handler_apple (9.3.0):
     - Flutter
-  - flutter_background_engine (0.0.1):
+  - background_data_fetcher (0.0.1):
     - Flutter
   - shared_preferences_foundation (0.0.1):
     - Flutter
@@ -32,7 +32,7 @@ DEPENDENCIES:
   - light (from `.symlinks/plugins/light/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
-  - flutter_background_engine (from `.symlinks/plugins/flutter_background_engine/ios`)
+  - background_data_fetcher (from `.symlinks/plugins/background_data_fetcher/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - thermal_sensor (from `.symlinks/plugins/thermal_sensor/ios`)
 
@@ -53,8 +53,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/package_info_plus/ios"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
-  flutter_background_engine:
-    :path: ".symlinks/plugins/flutter_background_engine/ios"
+  background_data_fetcher:
+    :path: ".symlinks/plugins/background_data_fetcher/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   thermal_sensor:
@@ -69,7 +69,7 @@ SPEC CHECKSUMS:
   light: 5e1e8346ee23840a8d35cea662dec2204240a08f
   package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
   permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
-  flutter_background_engine: 43f2850d4d1810494f52f0a02df7ae0cff654d5d
+  background_data_fetcher: 43f2850d4d1810494f52f0a02df7ae0cff654d5d
   shared_preferences_foundation: 5086985c1d43c5ba4d5e69a4e8083a389e2909e6
   thermal_sensor: e1a7d7f070c0e29496e5bc63377e1a5731de877f
 
