@@ -100,8 +100,30 @@ If the callback function you pass to this engine fetches GPS data (e.g., using [
 </array>
 ```
 
+#### 4. Enable Permission Groups (`ios/Podfile`)
 
-#### 4. The Xcode Step (Crucial)
+By default, all permissions are disabled in the iOS SDK to prevent App Store rejection. You must enable the ones you need in your Podfile:
+```ruby
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        
+        ## Enable the permissions used by this library:
+        'PERMISSION_NOTIFICATIONS=1',
+        'PERMISSION_LOCATION=1',
+        'PERMISSION_SENSORS=1'
+      ]
+    end
+  end
+end
+```
+
+
+#### 5. The Xcode Step (Crucial)
 
 Modifying the `Info.plist` manually is sometimes overridden by Xcode. To ensure it works:
 
