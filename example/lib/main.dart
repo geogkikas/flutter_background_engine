@@ -1,20 +1,21 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, File;
 import 'package:flutter/material.dart';
 import 'package:background_data_fetcher/background_data_fetcher.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_context/device_context.dart';
 
 // =================================================================
-// TOP-LEVEL CALLBACK FOR BACKGROUND ENGINE
+// 1. TOP-LEVEL CALLBACK FOR BACKGROUND ENGINE
 // =================================================================
 @pragma('vm:entry-point')
 Future<Map<String, dynamic>> fetchDeviceDataCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // 1. Fetch data using the elegant Configuration Objects
     final data = await DeviceContext.getSensorData(
       hardware: const HardwareConfig(
         deviceInfo: true,
@@ -44,49 +45,50 @@ Future<Map<String, dynamic>> fetchDeviceDataCallback() async {
     return {'error': e.toString()};
   }
 }
-// =================================================================
 
+// =================================================================
+// 2. MAIN APP
+// =================================================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SensorKitExampleApp());
+  runApp(const MyApp());
 }
 
-class SensorKitExampleApp extends StatelessWidget {
-  const SensorKitExampleApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Context Engine Example',
+      title: 'Background Engine',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      home: const DashboardPage(),
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _DashboardPageState extends State<DashboardPage>
+    with WidgetsBindingObserver {
   List<FetchRecord> _records = [];
   bool _isLoading = false;
   bool _isServiceRunning = false;
   int _currentInterval = 15;
-
   Timer? _uiHeartbeat;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
     _checkServiceStatus();
     _fetchData();
     _startHeartbeat();
@@ -109,16 +111,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _startHeartbeat() {
     _uiHeartbeat = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_isServiceRunning && mounted) {
-        _fetchData(silent: true);
-      }
+      if (_isServiceRunning && mounted) _fetchData(silent: true);
     });
   }
 
   Future<void> _checkServiceStatus() async {
     final isRunning = await BackgroundDataFetcher.isRunning();
-
-    // Read the interval from SharedPreferences (matching our internal storage key)
     final prefs = await SharedPreferences.getInstance();
     final interval = prefs.getInt('fbe_sampling_interval') ?? 15;
 
@@ -149,41 +147,171 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _syncDataToServer() async {
-    if (_records.isEmpty) return;
+  // =================================================================
+  // 3. DATA EXPORT & SYNC LOGIC
+  // =================================================================
+  Future<void> _shareData() async {
+    if (_records.isEmpty) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('⚠️ No data to share!')));
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    List<int> idsToSync = _records.map((record) => record.sqliteId!).toList();
-    await BackgroundDataFetcher.markAsSynced(idsToSync);
-    await _fetchData();
+    try {
+      List<Map<String, dynamic>> flattenedRecords = [];
+      Set<String> allKeys = {'timestamp'};
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Data successfully synced!')),
+      for (var record in _records) {
+        Map<String, dynamic> flatMap = {};
+        _flattenMap(record.payload, '', flatMap);
+        flatMap['timestamp'] = record.timestamp;
+        allKeys.addAll(flatMap.keys);
+        flattenedRecords.add(flatMap);
+      }
+
+      List<String> columns = allKeys.toList();
+      StringBuffer csvBuffer = StringBuffer();
+      csvBuffer.writeln(columns.join(','));
+
+      for (var flatRecord in flattenedRecords) {
+        List<String> rowValues = columns.map((col) {
+          var value = flatRecord[col];
+          if (value == null) return '';
+          String strValue = value.toString();
+          if (strValue.contains(',') ||
+              strValue.contains('"') ||
+              strValue.contains('\n')) {
+            strValue = '"${strValue.replaceAll('"', '""')}"';
+          }
+          return strValue;
+        }).toList();
+        csvBuffer.writeln(rowValues.join(','));
+      }
+
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/sensor_data_export.csv');
+      await file.writeAsString(csvBuffer.toString());
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Background Sensor Data Export',
+        text: 'Attached is the CSV export.',
       );
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Export failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _revertSync() async {
+  void _flattenMap(
+    Map<String, dynamic> map,
+    String prefix,
+    Map<String, dynamic> result,
+  ) {
+    map.forEach((key, value) {
+      if (value is Map<String, dynamic>) {
+        _flattenMap(value, '$prefix$key.', result);
+      } else {
+        result['$prefix$key'] = value;
+      }
+    });
+  }
+
+  Future<void> _syncDataToServer() async {
+    if (_records.isEmpty) return;
     setState(() => _isLoading = true);
-    await BackgroundDataFetcher.revertAllSyncedStatus();
+    List<int> idsToSync = _records.map((record) => record.sqliteId!).toList();
+    await BackgroundDataFetcher.markAsSynced(idsToSync);
     await _fetchData();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⏪ Synced records reverted!')),
-      );
-    }
+    if (mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('✅ Data synced!')));
   }
 
   Future<void> _deleteHistory() async {
     setState(() => _isLoading = true);
     await BackgroundDataFetcher.clearHistory();
     await _fetchData();
-    if (mounted) {
+    if (mounted)
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('🗑️ All history deleted!')));
+      ).showSnackBar(const SnackBar(content: Text('🗑️ History deleted!')));
+  }
+
+  // =================================================================
+  // 4. ENGINE CONTROLS & PERMISSIONS
+  // =================================================================
+  Future<void> _startService() async {
+    setState(() => _isLoading = true);
+
+    var notifStatus = await Permission.notification.request();
+    bool exactAlarmGranted = true;
+
+    if (Platform.isAndroid) {
+      var alarmStatus = await Permission.scheduleExactAlarm.request();
+      exactAlarmGranted = alarmStatus.isGranted;
     }
+
+    if (!notifStatus.isGranted || !exactAlarmGranted) {
+      setState(() => _isLoading = false);
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Core engine permissions denied!')),
+        );
+      return;
+    }
+
+    var locStatus = await Permission.locationWhenInUse.request();
+    if (locStatus.isGranted) {
+      await Permission.locationAlways.request();
+    } else {
+      setState(() => _isLoading = false);
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Location permission required!')),
+        );
+      return;
+    }
+
+    await Permission.activityRecognition.request();
+    if (Platform.isIOS) await Permission.sensors.request();
+
+    bool started = await BackgroundDataFetcher.initializeAndStart(
+      fetchCallback: fetchDeviceDataCallback,
+      config: FetchConfig(intervalMinutes: _currentInterval),
+    );
+
+    setState(() {
+      _isServiceRunning = started;
+      _isLoading = false;
+    });
+
+    if (mounted && started)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('🚀 Engine Started.')));
+  }
+
+  Future<void> _stopService() async {
+    setState(() => _isLoading = true);
+    BackgroundDataFetcher.stop();
+    setState(() {
+      _isServiceRunning = false;
+      _isLoading = false;
+    });
+    if (mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('🛑 Engine Stopped.')));
   }
 
   Future<void> _showIntervalDialog() async {
@@ -191,7 +319,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Select Logging Interval'),
+          title: const Text('Select Interval'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [1, 5, 15, 30, 60].map((min) {
@@ -208,100 +336,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       },
     );
 
-    if (selected != null && selected != _currentInterval) {
+    if (selected != null) {
       setState(() => _isLoading = true);
-      await BackgroundDataFetcher.updateInterval(selected);
-      await _checkServiceStatus();
-      setState(() => _isLoading = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('⏱️ Interval updated to $selected minutes.')),
-        );
+      try {
+        await BackgroundDataFetcher.updateInterval(selected);
+        await _checkServiceStatus();
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('⏱️ Interval updated.')));
+      } catch (e) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+          );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
-    }
-  }
-
-  // =================================================================
-  // START SERVICE & HANDLE PERMISSIONS MANUALLY
-  // =================================================================
-  Future<void> _startService() async {
-    setState(() => _isLoading = true);
-
-    // --- 1. Request Engine Permissions ---
-    var notifStatus = await Permission.notification.request();
-    bool exactAlarmGranted = true;
-
-    if (Platform.isAndroid) {
-      var alarmStatus = await Permission.scheduleExactAlarm.request();
-      exactAlarmGranted = alarmStatus.isGranted;
-    }
-
-    if (!notifStatus.isGranted || !exactAlarmGranted) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Cannot start: Core engine permissions denied!'),
-          ),
-        );
-      }
-      return;
-    }
-
-    // --- 2. Request Hardware Permissions (for device_context) ---
-    var locStatus = await Permission.locationWhenInUse.request();
-    if (locStatus.isGranted) {
-      await Permission.locationAlways
-          .request(); // Try to upgrade for background
-    } else {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Cannot start: Location permission required!'),
-          ),
-        );
-      }
-      return;
-    }
-
-    await Permission.activityRecognition.request();
-    if (Platform.isIOS) {
-      await Permission.sensors.request();
-    }
-
-    // --- 3. Start the Engine ---
-    bool started = await BackgroundDataFetcher.initializeAndStart(
-      fetchCallback: fetchDeviceDataCallback,
-      config: FetchConfig(intervalMinutes: _currentInterval),
-    );
-
-    setState(() {
-      _isServiceRunning = started;
-      _isLoading = false;
-    });
-
-    if (mounted && started) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('🚀 Engine Started.')));
-    }
-  }
-
-  Future<void> _stopService() async {
-    setState(() => _isLoading = true);
-    BackgroundDataFetcher.stop();
-
-    setState(() {
-      _isServiceRunning = false;
-      _isLoading = false;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('🛑 Engine Stopped.')));
     }
   }
 
@@ -312,52 +363,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         title: const Text('Background Context'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(icon: const Icon(Icons.share), onPressed: _shareData),
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: "Refresh Local Logs",
             onPressed: () => _fetchData(silent: false),
           ),
           IconButton(
             icon: const Icon(Icons.cloud_upload),
-            tooltip: "Simulate Server Sync",
             onPressed: _syncDataToServer,
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'interval') _showIntervalDialog();
-              if (value == 'revert') _revertSync();
               if (value == 'delete') _deleteHistory();
             },
-            itemBuilder: (BuildContext context) => [
+            itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'interval',
-                child: Row(
-                  children: [
-                    Icon(Icons.timer, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Text('Change Interval'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'revert',
-                child: Row(
-                  children: [
-                    Icon(Icons.undo, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Revert Synced Records'),
-                  ],
-                ),
+                child: Text('Change Interval'),
               ),
               const PopupMenuItem(
                 value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_forever, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Delete All History'),
-                  ],
-                ),
+                child: Text('Delete History'),
               ),
             ],
           ),
@@ -373,13 +400,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 : Colors.red.shade100,
             child: Text(
               _isServiceRunning
-                  ? "🟢 Engine Active ($_currentInterval min interval)."
-                  : "🔴 Engine is currently Stopped.",
+                  ? "🟢 Engine Active ($_currentInterval min)."
+                  : "🔴 Engine Stopped.",
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          // Log List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -554,13 +580,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onPressed: _stopService,
               backgroundColor: Colors.red.shade300,
               icon: const Icon(Icons.stop),
-              label: const Text("Stop Engine"),
+              label: const Text("Stop"),
             )
           : FloatingActionButton.extended(
               onPressed: _startService,
               backgroundColor: Colors.green.shade400,
               icon: const Icon(Icons.play_arrow),
-              label: const Text("Start Engine"),
+              label: const Text("Start"),
             ),
     );
   }

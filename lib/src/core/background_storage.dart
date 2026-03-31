@@ -8,6 +8,7 @@ import 'package:path/path.dart';
 class BackgroundStorage {
   static const String _intervalKey = 'fbe_sampling_interval';
   static const String _handleKey = 'fbe_callback_handle';
+  static const String _activeKey = 'fbe_is_active';
 
   static Database? _db;
 
@@ -130,5 +131,16 @@ class BackgroundStorage {
   static Future<void> revertAllSyncedStatus() async {
     final db = await _database;
     await db.rawUpdate('UPDATE records SET is_synced = 0');
+  }
+
+  static Future<void> setServiceActive(bool isActive) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_activeKey, isActive);
+  }
+
+  static Future<bool> isServiceActive() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getBool(_activeKey) ?? false;
   }
 }

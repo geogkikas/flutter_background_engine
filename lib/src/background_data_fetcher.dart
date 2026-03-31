@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    as import_fln;
 
 import 'models/fetch_config.dart';
 import 'models/fetch_record.dart';
@@ -23,17 +25,16 @@ class BackgroundDataFetcher {
     required Future<Map<String, dynamic>> Function() fetchCallback,
     FetchConfig config = const FetchConfig(),
   }) async {
-    // 1. Serialize the callback to survive isolate boundaries
+    // 1. Serialize the callback...
     final callbackHandle = PluginUtilities.getCallbackHandle(fetchCallback);
     if (callbackHandle == null) {
       throw Exception(
         "The fetchCallback MUST be a top-level or static function.",
       );
     }
-
     await BackgroundStorage.saveCallbackHandle(callbackHandle.toRawHandle());
 
-    // 2. Initialize Core Services
+    // 2. Initialize Core Services...
     final existingInterval = await BackgroundStorage.getSavedInterval();
     final intervalToUse = existingInterval > 0
         ? existingInterval
@@ -44,6 +45,28 @@ class BackgroundDataFetcher {
 
     final service = FlutterBackgroundService();
 
+    // Create the Silent/Minimized Notification Channel
+    if (Platform.isAndroid) {
+      final flutterLocalNotificationsPlugin =
+          import_fln.FlutterLocalNotificationsPlugin();
+
+      const channel = import_fln.AndroidNotificationChannel(
+        'silent_background_channel',
+        'Background Sync',
+        description: 'Used for silent data synchronization',
+        importance: import_fln.Importance.min,
+        playSound: false,
+        enableVibration: false,
+        showBadge: false,
+      );
+
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            import_fln.AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(channel);
+    }
+
     // 3. Configure the Background Service Wrapper
     if (!(await service.isRunning())) {
       await service.configure(
@@ -51,6 +74,9 @@ class BackgroundDataFetcher {
           onStart: onForegroundServiceStart,
           autoStart: false,
           isForegroundMode: true,
+          notificationChannelId: 'silent_background_channel',
+          initialNotificationTitle: 'System Sync',
+          initialNotificationContent: 'Running optimization',
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false,
@@ -63,6 +89,10 @@ class BackgroundDataFetcher {
 
     // 4. Kick off the initial exact alarm
     await _scheduleNextExactAlarm(intervalToUse);
+
+    // 5. Save the intended active state
+    await BackgroundStorage.setServiceActive(true);
+
     return true;
   }
 
@@ -70,6 +100,9 @@ class BackgroundDataFetcher {
   static void stop() {
     if (Platform.isAndroid) AndroidAlarmManager.cancel(4242);
     FlutterBackgroundService().invoke('stopService');
+
+    // Unset the active state
+    BackgroundStorage.setServiceActive(false);
   }
 
   /// Updates the interval for future fetches and reschedules the immediate next alarm.
@@ -109,7 +142,7 @@ class BackgroundDataFetcher {
 
   /// Returns true if the background service is currently active.
   static Future<bool> isRunning() async {
-    return await FlutterBackgroundService().isRunning();
+    return await BackgroundStorage.isServiceActive();
   }
 
   // MARK: - Private Helpers
@@ -119,7 +152,6 @@ class BackgroundDataFetcher {
       await AndroidAlarmManager.cancel(4242);
 
       final now = DateTime.now();
-      // Snap logic is identical to the one in background_task.dart
       final int minutesToNext =
           intervalMinutes - (now.minute % intervalMinutes);
 
@@ -138,8 +170,9 @@ class BackgroundDataFetcher {
       }
 
       debugPrint("\n=================================================");
-      debugPrint("📅 [BackgroundDataFetcher] OS ALARM SCHEDULED");
-      debugPrint("🎯 Target Execution Time: $targetTime");
+      debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
+      debugPrint("📱 Platform: ANDROID (AlarmManager)");
+      debugPrint("🎯 Target Execution: $targetTime");
       debugPrint("=================================================\n");
 
       await AndroidAlarmManager.oneShotAt(
@@ -149,7 +182,11 @@ class BackgroundDataFetcher {
         exact: true,
         wakeup: true,
         rescheduleOnReboot: true,
+        allowWhileIdle: true,
       );
+    } else if (Platform.isIOS) {
+      // 🍏 Notify the active iOS isolate to recalculate its precise Timer
+      FlutterBackgroundService().invoke('updateTimer');
     }
   }
 }

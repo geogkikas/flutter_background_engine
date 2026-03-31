@@ -122,7 +122,29 @@ Modifying the `Info.plist` manually is sometimes overridden by Xcode. To ensure 
 
 Good news! The core library automatically merges all required scheduling permissions (`WAKE_LOCK`, `SCHEDULE_EXACT_ALARM`, etc.) into your app. However, if you are fetching Location data in the background, you must explicitly upgrade your app's Foreground Service type.
 
-**Overriding the Service Type** (`android/app/src/main/AndroidManifest.xml`)
+#### 1. Enable Core Library Desugaring (Required)
+
+Because this library uses modern Java APIs to manage the silent background execution banner, you **must** enable core library desugaring in your host app to prevent build failures.
+
+Open your `android/app/build.gradle` (or `build.gradle.kts`) and add the following:
+
+```gradle
+android {
+    // ... existing config ...
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+        isCoreLibraryDesugaringEnabled = true // <--- 1. ADD THIS LINE
+    }
+}
+
+dependencies {
+    // ... existing dependencies ...
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4") // <--- 2. ADD THIS LINE
+}
+```
+
+#### 2. Overriding the Service Type (`android/app/src/main/AndroidManifest.xml`)
 If you are using location in your background callback, add the tools namespace to your <manifest> tag, and override the default dataSync service to include location:
 
 ```xml

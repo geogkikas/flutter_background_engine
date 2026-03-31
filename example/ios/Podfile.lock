@@ -1,78 +1,78 @@
 PODS:
-  - battery_plus (1.0.0):
+  - background_data_fetcher (0.0.1):
+    - Flutter
+  - device_context (0.0.1):
     - Flutter
   - Flutter (1.0.0)
+  - flutter_activity_recognition (0.0.1):
+    - Flutter
   - flutter_background_service_ios (0.0.3):
     - Flutter
-  - geolocator_apple (1.2.0):
+  - flutter_local_notifications (0.0.1):
     - Flutter
-    - FlutterMacOS
   - integration_test (0.0.1):
-    - Flutter
-  - light (4.1.1):
-    - Flutter
-  - package_info_plus (0.4.5):
     - Flutter
   - permission_handler_apple (9.3.0):
     - Flutter
-  - background_data_fetcher (0.0.1):
+  - share_plus (0.0.1):
     - Flutter
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - thermal_sensor (0.0.1):
+  - sqflite_darwin (0.0.4):
     - Flutter
+    - FlutterMacOS
 
 DEPENDENCIES:
-  - battery_plus (from `.symlinks/plugins/battery_plus/ios`)
-  - Flutter (from `Flutter`)
-  - flutter_background_service_ios (from `.symlinks/plugins/flutter_background_service_ios/ios`)
-  - geolocator_apple (from `.symlinks/plugins/geolocator_apple/darwin`)
-  - integration_test (from `.symlinks/plugins/integration_test/ios`)
-  - light (from `.symlinks/plugins/light/ios`)
-  - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
-  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - background_data_fetcher (from `.symlinks/plugins/background_data_fetcher/ios`)
+  - device_context (from `.symlinks/plugins/device_context/ios`)
+  - Flutter (from `Flutter`)
+  - flutter_activity_recognition (from `.symlinks/plugins/flutter_activity_recognition/ios`)
+  - flutter_background_service_ios (from `.symlinks/plugins/flutter_background_service_ios/ios`)
+  - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
-  - thermal_sensor (from `.symlinks/plugins/thermal_sensor/ios`)
+  - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
 
 EXTERNAL SOURCES:
-  battery_plus:
-    :path: ".symlinks/plugins/battery_plus/ios"
-  Flutter:
-    :path: Flutter
-  flutter_background_service_ios:
-    :path: ".symlinks/plugins/flutter_background_service_ios/ios"
-  geolocator_apple:
-    :path: ".symlinks/plugins/geolocator_apple/darwin"
-  integration_test:
-    :path: ".symlinks/plugins/integration_test/ios"
-  light:
-    :path: ".symlinks/plugins/light/ios"
-  package_info_plus:
-    :path: ".symlinks/plugins/package_info_plus/ios"
-  permission_handler_apple:
-    :path: ".symlinks/plugins/permission_handler_apple/ios"
   background_data_fetcher:
     :path: ".symlinks/plugins/background_data_fetcher/ios"
+  device_context:
+    :path: ".symlinks/plugins/device_context/ios"
+  Flutter:
+    :path: Flutter
+  flutter_activity_recognition:
+    :path: ".symlinks/plugins/flutter_activity_recognition/ios"
+  flutter_background_service_ios:
+    :path: ".symlinks/plugins/flutter_background_service_ios/ios"
+  flutter_local_notifications:
+    :path: ".symlinks/plugins/flutter_local_notifications/ios"
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  share_plus:
+    :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
-  thermal_sensor:
-    :path: ".symlinks/plugins/thermal_sensor/ios"
+  sqflite_darwin:
+    :path: ".symlinks/plugins/sqflite_darwin/darwin"
 
 SPEC CHECKSUMS:
-  battery_plus: 34f72fa2afeeea83bbae306c72a25828d3ec727a
+  background_data_fetcher: dd6ea039a98c15f2db9b7a48573b79f7b8d38390
+  device_context: 402701cd5be9f9a4e085c4b5635a6ebcfbcb4f84
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_activity_recognition: 5c3b026997742b01e82424ef257db9640822ad77
   flutter_background_service_ios: e30e0d3ee69e4cee66272d0c78eacd48c2e94aac
-  geolocator_apple: 66b711889fd333205763b83c9dcf0a57a28c7afd
+  flutter_local_notifications: eda81afddbf18f8589f6ec069ce593c4c6378769
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
-  light: 5e1e8346ee23840a8d35cea662dec2204240a08f
-  package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
   permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
-  background_data_fetcher: 43f2850d4d1810494f52f0a02df7ae0cff654d5d
+  share_plus: 8b6f8b3447e494cca5317c8c3073de39b3600d1f
   shared_preferences_foundation: 5086985c1d43c5ba4d5e69a4e8083a389e2909e6
-  thermal_sensor: e1a7d7f070c0e29496e5bc63377e1a5731de877f
+  sqflite_darwin: 5a7236e3b501866c1c9befc6771dfd73ffb8702d
 
-PODFILE CHECKSUM: d488de86cba7af4c4f105f609314cd4aaf3bf8a1
+PODFILE CHECKSUM: 8295f6ce43a893bfa5d89d7bdeaf926d065c0f3b
 
 COCOAPODS: 1.16.2
