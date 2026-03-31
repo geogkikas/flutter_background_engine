@@ -17,7 +17,7 @@ class BackgroundStorage {
   static Future<int> getSavedInterval() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    return prefs.getInt(_intervalKey) ?? 15;
+    return prefs.getInt(_intervalKey) ?? 0;
   }
 
   static Future<void> saveInterval(int minutes) async {
