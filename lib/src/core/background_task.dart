@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'background_storage.dart';
 
 const int _androidAlarmId = 4242;
+const MethodChannel _channel = MethodChannel('background_data_fetcher');
 
 // --- Add this variable for iOS ---
 Timer? _iosExactTimer;
@@ -81,11 +83,25 @@ Future<void> performBackgroundDataFetch() async {
             as Future<Map<String, dynamic>> Function()?;
 
     if (fetchFunction != null) {
+      // 🚀 1. ACQUIRE WAKELOCK (We request 30 seconds max to cover the 20s sensor window)
+      if (Platform.isAndroid) {
+        debugPrint("🔒 [Wakelock] Acquiring CPU lock...");
+        await _channel.invokeMethod('acquireWakelock', {'timeoutMs': 30000});
+      }
+
       debugPrint("⚙️ [Background Isolate] Executing developer callback...");
+
+      // Now the CPU is locked awake. This 20 second await will run flawlessly!
       final Map<String, dynamic> payload = await fetchFunction();
 
       await BackgroundStorage.insertRecord(payload);
       FlutterBackgroundService().invoke('recordUpdated');
+
+      // 🚀 2. RELEASE WAKELOCK
+      if (Platform.isAndroid) {
+        debugPrint("🔓 [Wakelock] Releasing CPU lock...");
+        await _channel.invokeMethod('releaseWakelock');
+      }
     }
 
     if (Platform.isAndroid) {
@@ -100,7 +116,7 @@ Future<void> performBackgroundDataFetch() async {
 
       await AndroidAlarmManager.oneShotAt(
         nextTrigger,
-        _androidAlarmId,
+        _androidAlarmId, // Using the variable you already declared
         performBackgroundDataFetch,
         exact: true,
         wakeup: true,
@@ -110,6 +126,13 @@ Future<void> performBackgroundDataFetch() async {
     }
   } catch (err) {
     debugPrint("❌ [Background Isolate] Fatal task error: $err");
+  } finally {
+    // 🚀 3. SAFETY RELEASE: Ensure we don't drain the battery if Dart crashes
+    if (Platform.isAndroid) {
+      try {
+        await _channel.invokeMethod('releaseWakelock');
+      } catch (_) {}
+    }
   }
 }
 

@@ -31,8 +31,8 @@ Future<Map<String, dynamic>> fetchDeviceDataCallback() async {
         aiActivityPrediction: true,
       ),
       continuousSampling: const ContinuousSamplingConfig(
-        window: Duration(seconds: 15),
-        samplingRateHz: 20,
+        window: Duration(seconds: 10),
+        samplingRateHz: 5,
         averageElectricalDraw: true,
         averageMotionState: true,
         averageAmbientLight: true,
