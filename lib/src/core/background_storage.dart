@@ -67,7 +67,7 @@ class BackgroundStorage {
   /// Saves a new fetch payload to the local database and truncates old records to prevent bloat.
   static Future<void> insertRecord(Map<String, dynamic> payload) async {
     final db = await _database;
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final timestamp = DateTime.now().toIso8601String();
 
     await db.insert('records', {
       'timestamp': timestamp,
