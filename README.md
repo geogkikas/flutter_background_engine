@@ -13,7 +13,7 @@ Designed to survive aggressive Android background limitations (OEM-specific RAM 
 
 * **Generic Payload Execution:** Pass any top-level Dart function. The engine executes it in the background and saves whatever Map<String, dynamic> it returns.
 
-* **Clock-Aligned Logging:** Data collection triggers at exact clock intervals (e.g., exactly at 12:00, 12:15, 12:30) using precise OS-level alarms rather than random offsets.
+* **Clock-Aligned Logging:** Data collection triggers at exact clock intervals (e.g., exactly at 12:00, 12:15, 12:30) using precise OS-level alarms. **Calculations are strictly UTC-based, making your background engine completely immune to unexpected timezone hopping or Daylight Saving Time changes.**
 
 * **Isolate-Safe Storage:** Background tasks log data directly to local SQLite storage with built-in synchronization tracking.
 
@@ -259,8 +259,10 @@ void syncDataToServer() async {
   List<FetchRecord> records = await BackgroundDataFetcher.getUnsyncedRecords();
 
   for (var record in records) {
-    print("Time: ${record.timestamp}");
-
+    // Convert the absolute epoch integer back to the user's local timezone
+    final localTime = DateTime.fromMillisecondsSinceEpoch(record.timestamp).toLocal();
+    print("Time: $localTime");
+    
     // Access your custom JSON payload directly!
     print("Battery: ${record.payload['battery']}%");
     print("Status: ${record.payload['status']}");
@@ -296,7 +298,7 @@ No more guessing map keys. The library returns a strongly typed model for absolu
 ```dart
 class FetchRecord {
   final int? sqliteId;                // The local database row ID
-  final String timestamp;             // ISO-8601 string of collection time
+  final int timestamp;                // Epoch timestamp (milliseconds since 1970) representing the exact absolute moment
   final Map<String, dynamic> payload; // Your custom data returned from the callback
   final bool isSynced;                // Whether this has been marked as synced
 }

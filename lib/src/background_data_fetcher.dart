@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
@@ -98,7 +97,9 @@ class BackgroundDataFetcher {
 
   /// Stops the background service and cancels all future alarms.
   static void stop() {
-    if (Platform.isAndroid) AndroidAlarmManager.cancel(4242);
+    if (Platform.isAndroid) {
+      AndroidAlarmManager.cancel(backgroundAlarmId); // <-- Using shared ID
+    }
     FlutterBackgroundService().invoke('stopService');
 
     // Unset the active state
@@ -149,43 +150,8 @@ class BackgroundDataFetcher {
 
   static Future<void> _scheduleNextExactAlarm(int intervalMinutes) async {
     if (Platform.isAndroid) {
-      await AndroidAlarmManager.cancel(4242);
-
-      final now = DateTime.now();
-      final int minutesToNext =
-          intervalMinutes - (now.minute % intervalMinutes);
-
-      DateTime targetTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        now.hour,
-        now.minute + minutesToNext,
-        0,
-        0,
-      );
-
-      if (targetTime.difference(now).inSeconds < 60) {
-        targetTime = targetTime.add(Duration(minutes: intervalMinutes));
-      }
-
-      debugPrint("\n=================================================");
-      debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
-      debugPrint("📱 Platform: ANDROID (AlarmManager)");
-      debugPrint("🎯 Target Execution: $targetTime");
-      debugPrint("=================================================\n");
-
-      await AndroidAlarmManager.oneShotAt(
-        targetTime,
-        4242,
-        performBackgroundDataFetch,
-        exact: true,
-        wakeup: true,
-        rescheduleOnReboot: true,
-        allowWhileIdle: true,
-      );
+      await scheduleAndroidExactAlarm(intervalMinutes);
     } else if (Platform.isIOS) {
-      // 🍏 Notify the active iOS isolate to recalculate its precise Timer
       FlutterBackgroundService().invoke('updateTimer');
     }
   }

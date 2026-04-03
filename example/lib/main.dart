@@ -433,7 +433,9 @@ class _DashboardPageState extends State<DashboardPage>
                       final motion = payload['motion'] ?? {};
                       final activity = payload['activity'] ?? {};
 
-                      final time = DateTime.parse(record.timestamp).toLocal();
+                      final time = DateTime.fromMillisecondsSinceEpoch(
+                        record.timestamp,
+                      ).toLocal();
                       final formattedTime =
                           "${time.hour}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}";
 

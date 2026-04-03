@@ -5,8 +5,8 @@ class FetchRecord {
   /// The local SQLite database ID. Null if the record is not yet persisted.
   final int? sqliteId;
 
-  /// ISO-8601 timestamp representing the exact moment the data was collected.
-  final String timestamp;
+  /// Epoch timestamp (milliseconds since 1970) representing the exact absolute moment.
+  final int timestamp;
 
   /// The dynamic JSON payload returned by your custom fetch callback.
   final Map<String, dynamic> payload;
@@ -29,7 +29,7 @@ class FetchRecord {
 
     return FetchRecord(
       sqliteId: json['sqlite_id'],
-      timestamp: json['timestamp'] ?? '',
+      timestamp: json['timestamp'] as int? ?? 0, // Extracted as integer
       payload: parsedPayload,
       isSynced: json['is_synced'] == 1 || json['is_synced'] == true,
     );

@@ -13,7 +13,6 @@ class BackgroundStorage {
   static Database? _db;
 
   // MARK: - SharedPreferences Configuration
-
   static Future<int> getSavedInterval() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -37,7 +36,6 @@ class BackgroundStorage {
   }
 
   // MARK: - SQLite Database Management
-
   static Future<Database> get _database async {
     if (_db != null) return _db!;
     _db = await _initDB('background_fetch_records.db');
@@ -55,7 +53,7 @@ class BackgroundStorage {
         await db.execute('''
           CREATE TABLE records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
             payload TEXT NOT NULL,
             is_synced INTEGER DEFAULT 0
           )
@@ -64,10 +62,10 @@ class BackgroundStorage {
     );
   }
 
-  /// Saves a new fetch payload to the local database and truncates old records to prevent bloat.
+  /// Saves a new fetch payload to the local database.
   static Future<void> insertRecord(Map<String, dynamic> payload) async {
     final db = await _database;
-    final timestamp = DateTime.now().toIso8601String();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     await db.insert('records', {
       'timestamp': timestamp,
@@ -84,7 +82,6 @@ class BackgroundStorage {
     ''');
   }
 
-  /// Retrieves the most recent records, ordered from newest to oldest.
   static Future<List<Map<String, dynamic>>> getAllRecords({
     int limit = 1000,
   }) async {
@@ -97,7 +94,6 @@ class BackgroundStorage {
     return maps.map((row) => {...row, 'sqlite_id': row['id']}).toList();
   }
 
-  /// Retrieves records that have not yet been marked as synced.
   static Future<List<Map<String, dynamic>>> getUnsyncedRecords({
     int limit = 500,
   }) async {
@@ -106,13 +102,12 @@ class BackgroundStorage {
       'records',
       where: 'is_synced = ?',
       whereArgs: [0],
-      orderBy: 'id ASC', // Oldest first for syncing
+      orderBy: 'id ASC',
       limit: limit,
     );
     return maps.map((row) => {...row, 'sqlite_id': row['id']}).toList();
   }
 
-  /// Marks a specific list of SQLite IDs as successfully synced.
   static Future<void> markAsSynced(List<int> ids) async {
     if (ids.isEmpty) return;
     final db = await _database;

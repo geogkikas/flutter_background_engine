@@ -7,18 +7,19 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'background_storage.dart';
 
-const int _androidAlarmId = 4242;
-const MethodChannel _channel = MethodChannel('background_data_fetcher');
+const int backgroundAlarmId = 4242;
+const MethodChannel backgroundChannel = MethodChannel(
+  'background_data_fetcher',
+);
 
-// --- Add this variable for iOS ---
 Timer? _iosExactTimer;
 
-/// Calculates the exact next trigger time, snapping to the minute interval.
-DateTime _calculateNextExactTrigger(int intervalMinutes) {
-  final now = DateTime.now();
+/// Shared utility: Calculates the exact next trigger time using absolute UTC.
+DateTime calculateNextExactTrigger(int intervalMinutes) {
+  final now = DateTime.now().toUtc();
   final int minutesToNext = intervalMinutes - (now.minute % intervalMinutes);
 
-  DateTime targetTime = DateTime(
+  DateTime targetTime = DateTime.utc(
     now.year,
     now.month,
     now.day,
@@ -31,11 +32,33 @@ DateTime _calculateNextExactTrigger(int intervalMinutes) {
   if (targetTime.difference(now).inSeconds < 10) {
     targetTime = targetTime.add(Duration(minutes: intervalMinutes));
   }
-
   return targetTime;
 }
 
-// --- Add this precise recursive scheduling function for iOS ---
+/// Shared utility: Cancels the old alarm and schedules the next exact Android alarm.
+Future<void> scheduleAndroidExactAlarm(int intervalMinutes) async {
+  await AndroidAlarmManager.cancel(backgroundAlarmId);
+
+  DateTime targetTime = calculateNextExactTrigger(intervalMinutes);
+
+  debugPrint("\n=================================================");
+  debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
+  debugPrint("📱 Platform: ANDROID (AlarmManager)");
+  debugPrint("🎯 Target Execution: ${targetTime.toLocal()}");
+  debugPrint("=================================================\n");
+
+  await AndroidAlarmManager.oneShotAt(
+    targetTime,
+    backgroundAlarmId,
+    performBackgroundDataFetch,
+    exact: true,
+    wakeup: true,
+    rescheduleOnReboot: true,
+    allowWhileIdle: true,
+  );
+}
+
+// Scheduling function for iOS
 void _scheduleIosExactTimer() async {
   _iosExactTimer?.cancel();
 
@@ -43,21 +66,22 @@ void _scheduleIosExactTimer() async {
   if (!isActive) return;
 
   final interval = await BackgroundStorage.getSavedInterval();
-  final targetTime = _calculateNextExactTrigger(interval);
-  final duration = targetTime.difference(DateTime.now());
+  final targetTime = calculateNextExactTrigger(interval);
+  final duration = targetTime.difference(DateTime.now().toUtc());
 
-  // Cancel again AFTER the async gap to destroy duplicate race-condition timers!
   _iosExactTimer?.cancel();
 
   debugPrint("\n=================================================");
   debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
   debugPrint("📱 Platform: iOS (Foreground Heartbeat)");
-  debugPrint("🎯 Target Execution: $targetTime (in ${duration.inSeconds}s)");
+  debugPrint(
+    "🎯 Target Execution: ${targetTime.toLocal()} (in ${duration.inSeconds}s)",
+  );
   debugPrint("=================================================\n");
 
   _iosExactTimer = Timer(duration, () async {
     await performBackgroundDataFetch();
-    _scheduleIosExactTimer(); // Loop the timer precisely
+    _scheduleIosExactTimer();
   });
 }
 
@@ -83,54 +107,36 @@ Future<void> performBackgroundDataFetch() async {
             as Future<Map<String, dynamic>> Function()?;
 
     if (fetchFunction != null) {
-      // 🚀 1. ACQUIRE WAKELOCK (We request 30 seconds max to cover the 20s sensor window)
       if (Platform.isAndroid) {
         debugPrint("🔒 [Wakelock] Acquiring CPU lock...");
-        await _channel.invokeMethod('acquireWakelock', {'timeoutMs': 30000});
+        await backgroundChannel.invokeMethod('acquireWakelock', {
+          'timeoutMs': 30000,
+        });
       }
 
       debugPrint("⚙️ [Background Isolate] Executing developer callback...");
 
-      // Now the CPU is locked awake. This 20 second await will run flawlessly!
       final Map<String, dynamic> payload = await fetchFunction();
 
       await BackgroundStorage.insertRecord(payload);
       FlutterBackgroundService().invoke('recordUpdated');
 
-      // 🚀 2. RELEASE WAKELOCK
       if (Platform.isAndroid) {
         debugPrint("🔓 [Wakelock] Releasing CPU lock...");
-        await _channel.invokeMethod('releaseWakelock');
+        await backgroundChannel.invokeMethod('releaseWakelock');
       }
     }
 
     if (Platform.isAndroid) {
       final interval = await BackgroundStorage.getSavedInterval();
-      final nextTrigger = _calculateNextExactTrigger(interval);
-
-      debugPrint("\n=================================================");
-      debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
-      debugPrint("📱 Platform: ANDROID (AlarmManager)");
-      debugPrint("🎯 Target Execution: $nextTrigger");
-      debugPrint("=================================================\n");
-
-      await AndroidAlarmManager.oneShotAt(
-        nextTrigger,
-        _androidAlarmId, // Using the variable you already declared
-        performBackgroundDataFetch,
-        exact: true,
-        wakeup: true,
-        rescheduleOnReboot: true,
-        allowWhileIdle: true,
-      );
+      await scheduleAndroidExactAlarm(interval);
     }
   } catch (err) {
     debugPrint("❌ [Background Isolate] Fatal task error: $err");
   } finally {
-    // 🚀 3. SAFETY RELEASE: Ensure we don't drain the battery if Dart crashes
     if (Platform.isAndroid) {
       try {
-        await _channel.invokeMethod('releaseWakelock');
+        await backgroundChannel.invokeMethod('releaseWakelock');
       } catch (_) {}
     }
   }
@@ -169,10 +175,8 @@ void onForegroundServiceStart(ServiceInstance service) async {
   // iOS FOREGROUND EXACT TIMING
   // =========================================================
   if (Platform.isIOS) {
-    // 1. Start the precise recursive timer chain
     _scheduleIosExactTimer();
 
-    // 2. Listen for 'updateInterval' events from the UI Isolate
     service.on('updateTimer').listen((event) {
       debugPrint("🍏 [iOS Engine] Interval changed! Recalculating schedule...");
       _scheduleIosExactTimer();
