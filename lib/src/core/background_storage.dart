@@ -73,7 +73,7 @@ class BackgroundStorage {
       'is_synced': 0,
     });
 
-    debugPrint("💾 [BackgroundStorage] Payload saved at $timestamp.");
+    debugPrint("💾 [DB] New record cached (Local ID: ${DateTime.now().millisecondsSinceEpoch})");
 
     // Auto-cleanup: Keep only the latest 50,000 records
     await db.execute('''

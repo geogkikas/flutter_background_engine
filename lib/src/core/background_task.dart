@@ -41,11 +41,7 @@ Future<void> scheduleAndroidExactAlarm(int intervalMinutes) async {
 
   DateTime targetTime = calculateNextExactTrigger(intervalMinutes);
 
-  debugPrint("\n=================================================");
-  debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
-  debugPrint("📱 Platform: ANDROID (AlarmManager)");
-  debugPrint("🎯 Target Execution: ${targetTime.toLocal()}");
-  debugPrint("=================================================\n");
+  debugPrint("🛰️ [ENGINE] 📅 Android Alarm scheduled for: ${targetTime.toLocal()}");
 
   await AndroidAlarmManager.oneShotAt(
     targetTime,
@@ -71,13 +67,7 @@ void _scheduleIosExactTimer() async {
 
   _iosExactTimer?.cancel();
 
-  debugPrint("\n=================================================");
-  debugPrint("📅 [Task Scheduler] EXACT ALARM SCHEDULED");
-  debugPrint("📱 Platform: iOS (Foreground Heartbeat)");
-  debugPrint(
-    "🎯 Target Execution: ${targetTime.toLocal()} (in ${duration.inSeconds}s)",
-  );
-  debugPrint("=================================================\n");
+  debugPrint("🛰️ [ENGINE] 📅 iOS Heartbeat timer set for: ${targetTime.toLocal()} (in ${duration.inSeconds}s)");
 
   _iosExactTimer = Timer(duration, () async {
     await performBackgroundDataFetch();
@@ -91,11 +81,7 @@ Future<void> performBackgroundDataFetch() async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
 
-  debugPrint("\n=================================================");
-  debugPrint("⚡ [Background Isolate] AWAKE AND RUNNING!");
-  debugPrint("📱 Platform: ${Platform.operatingSystem.toUpperCase()}");
-  debugPrint("⏰ Wake-Up Time: ${DateTime.now()}");
-  debugPrint("=================================================\n");
+  debugPrint("⚡ [WAKE] ⏰ Background isolate active at ${DateTime.now().toLocal()}");
 
   try {
     final handleRaw = await BackgroundStorage.getCallbackHandle();
@@ -108,13 +94,13 @@ Future<void> performBackgroundDataFetch() async {
 
     if (fetchFunction != null) {
       if (Platform.isAndroid) {
-        debugPrint("🔒 [Wakelock] Acquiring CPU lock...");
+        debugPrint("⚡ [WAKE] 🔒 CPU Wakelock acquired.");
         await backgroundChannel.invokeMethod('acquireWakelock', {
-          'timeoutMs': 30000,
+          'timeoutMs': 60000,
         });
       }
 
-      debugPrint("⚙️ [Background Isolate] Executing developer callback...");
+      debugPrint("⚡ [WAKE] ⚙️ Executing developer callback...");
 
       final Map<String, dynamic> payload = await fetchFunction();
 
@@ -122,19 +108,20 @@ Future<void> performBackgroundDataFetch() async {
       FlutterBackgroundService().invoke('recordUpdated');
 
       if (Platform.isAndroid) {
-        debugPrint("🔓 [Wakelock] Releasing CPU lock...");
+        debugPrint("⚡ [WAKE] 🔓 CPU Wakelock released.");
         await backgroundChannel.invokeMethod('releaseWakelock');
       }
     }
-
-    if (Platform.isAndroid) {
-      final interval = await BackgroundStorage.getSavedInterval();
-      await scheduleAndroidExactAlarm(interval);
-    }
   } catch (err) {
-    debugPrint("❌ [Background Isolate] Fatal task error: $err");
+    debugPrint("⚡ [WAKE] ❌ Isolate Task Error: $err");
   } finally {
     if (Platform.isAndroid) {
+      try {
+        final interval = await BackgroundStorage.getSavedInterval();
+        await scheduleAndroidExactAlarm(interval);
+      } catch (e) {
+        debugPrint("⚡ [WAKE] ⚠️ Failed to reschedule: $e");
+      }
       try {
         await backgroundChannel.invokeMethod('releaseWakelock');
       } catch (_) {}
@@ -147,7 +134,7 @@ Future<void> performBackgroundDataFetch() async {
 Future<bool> onIosBackground(ServiceInstance service) async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
-  debugPrint("🍏 [iOS Background] Triggered by BGTaskScheduler.");
+  debugPrint("🍏 [WAKE] 📦 iOS BGTask triggered.");
   await performBackgroundDataFetch();
   return true;
 }
@@ -156,7 +143,7 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 @pragma('vm:entry-point')
 void onForegroundServiceStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
-  debugPrint("🛡️ [Foreground Service] Started successfully.");
+  debugPrint("🛰️ [ENGINE] 🛡️ Foreground Service wrapper active.");
 
   if (service is AndroidServiceInstance) {
     service.setForegroundNotificationInfo(
@@ -166,7 +153,7 @@ void onForegroundServiceStart(ServiceInstance service) async {
   }
 
   service.on('stopService').listen((event) {
-    debugPrint("🛑 [Foreground Service] Stop command received.");
+    debugPrint("🛰️ [ENGINE] 🛑 Foreground Service stop requested.");
     _iosExactTimer?.cancel(); // Kill the iOS timer on stop
     service.stopSelf();
   });
@@ -178,7 +165,7 @@ void onForegroundServiceStart(ServiceInstance service) async {
     _scheduleIosExactTimer();
 
     service.on('updateTimer').listen((event) {
-      debugPrint("🍏 [iOS Engine] Interval changed! Recalculating schedule...");
+      debugPrint("🛰️ [ENGINE] 🍏 iOS timing interval updated.");
       _scheduleIosExactTimer();
     });
   }
